@@ -29,6 +29,7 @@ METAL1 = {"layer": 1, "datatype": 0}
 METAL2 = {"layer": 2, "datatype": 0}
 
 # Create an array of rectangles!
+# Demonstrate arbitrary spacing, varying widths, specifying a GDSII layer.
 x_spacing = 20 # (um)
 y_spacing = 15 # (um)
 x_offset = 5 # (um)
