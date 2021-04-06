@@ -20,8 +20,13 @@ lib = gdspy.GdsLibrary()
 cell = lib.new_cell('FIRST')
 
 # Create the geometry (a single rectangle) and add it to the cell.
+# This will be added to layer 0/0 by default.
 rect = gdspy.Rectangle((0, 0), (2, 1))
 cell.add(rect)
+
+# Define a layer/datatype
+METAL1 = {"layer": 1, "datatype": 0}
+METAL2 = {"layer": 2, "datatype": 0}
 
 # Create an array of rectangles!
 x_spacing = 20 # (um)
@@ -33,7 +38,8 @@ for x_count in range(10): # 0 to 9
         rect_width = 10 + 0.9*x_count
         rect_height = 10 + 0.9 * y_count
         rect = gdspy.Rectangle( (x_offset+x_spacing*x_count, y_offset+y_spacing*y_count),
-                                (x_offset+x_spacing*x_count+rect_width, y_offset+y_spacing*y_count+rect_height))
+                                (x_offset+x_spacing*x_count+rect_width, y_offset+y_spacing*y_count+rect_height),
+                                **METAL1)
         cell.add(rect)
 
 # Save the library in a file called 'first.gds'.
