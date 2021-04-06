@@ -2,10 +2,10 @@
 """
 This is a test script to generate microrobot parts with the gdspy library.
 
-The gdspy library will eventually be superseded by the gdstk library,
-which is similar but uses significant compiled c code for faster speeds.
-However, it requires LAPACK, which is currently not straightforward to
-install on Windows.
+Note that the gdspy library will eventually be superseded by the gdstk library
+from the same authors, which is similar but uses significant compiled c code
+for faster speeds. However, it requires LAPACK, which is currently not
+straightforward to install on Windows.
 
 Right now, this script follows directly from the gdspy documentation at
 https://gdspy.readthedocs.io/en/stable/gettingstarted.html .
