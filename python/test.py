@@ -23,6 +23,19 @@ cell = lib.new_cell('FIRST')
 rect = gdspy.Rectangle((0, 0), (2, 1))
 cell.add(rect)
 
+# Create an array of rectangles!
+x_spacing = 20 # (um)
+y_spacing = 15 # (um)
+x_offset = 5 # (um)
+y_offset = -20 # (um)
+for x_count in range(10): # 0 to 9
+    for y_count in range(5): # 0 to 4
+        rect_width = 10 + 0.9*x_count
+        rect_height = 10 + 0.9 * y_count
+        rect = gdspy.Rectangle( (x_offset+x_spacing*x_count, y_offset+y_spacing*y_count),
+                                (x_offset+x_spacing*x_count+rect_width, y_offset+y_spacing*y_count+rect_height))
+        cell.add(rect)
+
 # Save the library in a file called 'first.gds'.
 lib.write_gds('first.gds')
 
