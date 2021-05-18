@@ -33,8 +33,8 @@
 # below). Next, it will merge polygons from individual layers together,
 # as well as polygons from certain layers that are supposed to be electrically
 # connected (also defined in the DRC script below). The result is a set of
-# merged polygons, each of which is one circuit trace (and is electrically
-# insulated from the other merged polygons). Finally, the program will ensure
+# merged polygons ("nets"), each of which is one circuit trace (and is electrically
+# insulated from the other nets). Finally, the program will ensure
 # that labels with the same text (e.g., "GND" and "GND") are on the same
 # merged polygon. DRC violations will be reported if two labels with the same
 # text are not connected (e.g., maybe one "GND" is not connected to another
@@ -47,7 +47,8 @@
 
 # list of DRC functions: https://klayout.de/doc/about/drc_ref.html
 
-# input layers from current open layout file
+# First, get some layers from the currently open GDSII file.
+# This can be changed to open whatever layers are of concern.
 wafer     = input(0, 0)
 nottrench = input(1, 0)
 retrench  = input(2, 0) 
@@ -60,37 +61,62 @@ remetal   = input(8, 0)
 dummy     = input(9, 0)
 notdummy  = input(10, 0)
 
-# extract text labels for circuits individually (else they may be lost during boolean layer operations)
+# Also get just the text labels from some layers from the
+# currently open file. Do this separately or else the labels
+# may be lost during boolean layer operations)
 soi_labels = labels(3, 0)
 metal_labels = labels(6, 0)
 
-# create bounding box from extents of the layout file for area calculations
-# only include layers that are part of the design, not entire GDSII file
-bounds = (wafer.extents + nottrench.extents + retrench.extents + soi.extents + soihole.extents + resoi.extents + dummy.extents + notdummy.extents + metal.extents + metalhole.extents + remetal.extents).extents
+# Now, do boolean arithmetic to create electrically connected
+# geometry (nets). This can be done in two ways: straightforward
+# boolean arithmetic (e.g., subtracting one layer from another)
+# and the "connect" function (https://klayout.de/doc/about/drc_ref_netter.html#connect)
+# which makes something into a net. These are almost but not
+# quite the same: the connect function is required to make
+# KLayout know we're making electrical connections, and it also acts
+# kind of like a boolean union joining two layers (but not quite,
+# if multiple layers are overlapping). Normal boolean arithmetic
+# is useful for e.g., subtractions.
+#
+# If in doubt, it's best to use boolean arithmetic to generate the
+# layers as they will be fabricated, then use the connect function
+# between fabricated layers that are electrically connected and
+# between the text labels.
+combined_soi   = ((soi - soihole) + resoi) + (dummy - notdummy) # these layers are all fabricated as a single step, so just combine them now
+combined_metal = ((metal - metalhole) + remetal)                # likewise
+connect(combined_soi, combined_metal)                           # these two are electrically connected, so use the "connect" function
 
-# do layer math
-combined_soi   = ((soi - soihole) + resoi) + (dummy - notdummy)
-combined_metal = ((metal - metalhole) + remetal)
-
-# create a report database to display results
-report("BAMLAB 40umtrench connection")
-
-# test connectivity
-connect(combined_soi, combined_metal)
+# Also connect the labels to their corresponding layers
 connect(combined_soi, soi_labels) # add text labels from SOI (that may have been lost during boolean operations)
 connect(combined_metal, metal_labels) # add text labels from metal (that may have been lost during boolean operations)
 # connect_implicit can make a virtual connection between text labels with the same text, but we don't usually want that
+
+# Before the actual connectivity check, do some stuff
+# to make the results look nice afterward: open the
+# DRC reporting window and, because all DRC violations
+# must be associated with geometry, just get the boundary
+# of all layers of concern. More useful geometry can be
+# seen in the netlist browser, which will be opened later.
+report("Electrical Connectivity Check")
+bounds = (wafer.extents + nottrench.extents + retrench.extents + soi.extents + soihole.extents + resoi.extents + dummy.extents + notdummy.extents + metal.extents + metalhole.extents + remetal.extents).extents
+
+# Finally, do the connectivity check.
 passed_opencircuit = true
 passed_shortcircuit = true
 nets = []
-# iterate through nets (stored in circuits in a global netlist; I *think* this accounts for cell hierarchy?)
+# iterate through all nets (stored in circuits in a global netlist; I *think* this accounts for cell hierarchy?)
 netlist.each_circuit do |cir|
     cir.each_net do |net|
+        # get the unique text labels ("names") of the current net
         names = net.name.split(',') # messy, but couldn't find a better way
+        
+        # there should be either zero (no labels) or one (all the same) unique names, else there's a short circuit
         if names.length &gt; 1 then
             bounds.output("short circuit violation", "the nets [%s] are connected; see netlist browser" % names.map{ |name| "\"" + name + "\"" }.join(", "))
             passed_shortcircuit = false
         end
+        
+        # also, for each name on this net, it shouldn't appear on any other net (else there's an open circuit)
         names.each do |name|
             if nets.include?(name) then
                 bounds.output("open circuit violation", "net \"%s\" has multiple disconnected parts; see netlist browser" % name)
@@ -101,12 +127,16 @@ netlist.each_circuit do |cir|
         end
     end
 end
+
+# If checks passed, report success for that warm fuzzy feeling of validation
 if passed_shortcircuit then
     make_layer.output("short circuit violation", "") # empty output to indicate check passed
 end
 if passed_opencircuit then
     make_layer.output("open circuit violation", "") # empty output to indicate check passed
 end
+
+# If checks failed, open the netlist browser, which can display individual nets, so it's easy to find where the problem is
 if (not passed_shortcircuit) or (not passed_opencircuit) then
     report_netlist
 end</text>
