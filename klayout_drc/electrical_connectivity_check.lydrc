@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description/>
+ <version/>
+ <category>drc</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <shortcut/>
+ <show-in-menu>true</show-in-menu>
+ <group-name>drc_scripts</group-name>
+ <menu-path>tools_menu.drc.end</menu-path>
+ <interpreter>dsl</interpreter>
+ <dsl-interpreter-name>drc-dsl-xml</dsl-interpreter-name>
+ <text># Electrical Connectivity Checker
+#
+# This DRC script can check to make sure things are electrically connected
+# (or not connected). It's ideal for making sure that there aren't any
+# accidental short circuits between traces when there are somewhat complex
+# wiring paths.
+# 
+# Instructions:
+#
+# Put GDSII text elements (the GDSII text items that aren't fabricated,
+# ot polygons that look like text) at assorted points on the wafer and
+# on assorted layers. Edit the program below (according to the comments)
+# and run the program.
+#
+# The program will look over the entire GDSII file. It will find all text
+# elements ("labels") on several given layers (defined in the DRC script
+# below). Next, it will merge polygons from individual layers together,
+# as well as polygons from certain layers that are supposed to be electrically
+# connected (also defined in the DRC script below). The result is a set of
+# merged polygons, each of which is one circuit trace (and is electrically
+# insulated from the other merged polygons). Finally, the program will ensure
+# that labels with the same text (e.g., "GND" and "GND") are on the same
+# merged polygon. DRC violations will be reported if two labels with the same
+# text are not connected (e.g., maybe one "GND" is not connected to another
+# "GND") (an "open circuit"), or if two labels with different text are
+# connected (e.g., "GND" and "VDD") (a "short circuit").
+#
+# NOTE: currently, this only supports a single wiring layer. If multiple
+# wiring layers overlap but are separated by an insulator, this algorithm
+# will need to be improved to support that. It shouldn't be too hard.
+
+# list of DRC functions: https://klayout.de/doc/about/drc_ref.html
+
+# input layers from current open layout file
+wafer     = input(0, 0)
+nottrench = input(1, 0)
+retrench  = input(2, 0) 
+soi       = input(3, 0)
+soihole   = input(4, 0)
+resoi     = input(5, 0)
+metal     = input(6, 0)
+metalhole = input(7, 0)
+remetal   = input(8, 0)
+dummy     = input(9, 0)
+notdummy  = input(10, 0)
+
+# extract text labels for circuits individually (else they may be lost during boolean layer operations)
+soi_labels = labels(3, 0)
+metal_labels = labels(6, 0)
+
+# create bounding box from extents of the layout file for area calculations
+# only include layers that are part of the design, not entire GDSII file
+bounds = (wafer.extents + nottrench.extents + retrench.extents + soi.extents + soihole.extents + resoi.extents + dummy.extents + notdummy.extents + metal.extents + metalhole.extents + remetal.extents).extents
+
+# do layer math
+combined_soi   = ((soi - soihole) + resoi) + (dummy - notdummy)
+combined_metal = ((metal - metalhole) + remetal)
+
+# create a report database to display results
+report("BAMLAB 40umtrench connection")
+
+# test connectivity
+connect(combined_soi, combined_metal)
+connect(combined_soi, soi_labels) # add text labels from SOI (that may have been lost during boolean operations)
+connect(combined_metal, metal_labels) # add text labels from metal (that may have been lost during boolean operations)
+# connect_implicit can make a virtual connection between text labels with the same text, but we don't usually want that
+passed_opencircuit = true
+passed_shortcircuit = true
+nets = []
+# iterate through nets (stored in circuits in a global netlist; I *think* this accounts for cell hierarchy?)
+netlist.each_circuit do |cir|
+    cir.each_net do |net|
+        names = net.name.split(',') # messy, but couldn't find a better way
+        if names.length &gt; 1 then
+            bounds.output("short circuit violation", "the nets [%s] are connected; see netlist browser" % names.map{ |name| "\"" + name + "\"" }.join(", "))
+            passed_shortcircuit = false
+        end
+        names.each do |name|
+            if nets.include?(name) then
+                bounds.output("open circuit violation", "net \"%s\" has multiple disconnected parts; see netlist browser" % name)
+                passed_opencircuit = false
+            else
+                nets.push(name)
+            end
+        end
+    end
+end
+if passed_shortcircuit then
+    make_layer.output("short circuit violation", "") # empty output to indicate check passed
+end
+if passed_opencircuit then
+    make_layer.output("open circuit violation", "") # empty output to indicate check passed
+end
+if (not passed_shortcircuit) or (not passed_opencircuit) then
+    report_netlist
+end</text>
+</klayout-macro>

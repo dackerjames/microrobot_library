@@ -1,6 +1,6 @@
 # microrobot_library
 
-This is a set of programs to aid in MEMS microrobot design and layout.
+This is a set of programs to aid in MEMS microrobot design and layout. They are not specific to any one project and are intended to be flexible enough for multiple applications (e.g., different microfabrication recipes).
 
 ## Layout Generation
 
