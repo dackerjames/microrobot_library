@@ -130,10 +130,10 @@ end
 
 # If checks passed, report success for that warm fuzzy feeling of validation
 if passed_shortcircuit then
-    make_layer.output("short circuit violation", "") # empty output to indicate check passed
+    make_layer.output("short circuit violation", "") # use empty layer ("make_layer") to indicate check passed
 end
 if passed_opencircuit then
-    make_layer.output("open circuit violation", "") # empty output to indicate check passed
+    make_layer.output("open circuit violation", "") # use empty layer ("make_layer") to indicate check passed
 end
 
 # If checks failed, open the netlist browser, which can display individual nets, so it's easy to find where the problem is

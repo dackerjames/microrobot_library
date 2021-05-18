@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description/>
+ <version/>
+ <category>drc</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <shortcut/>
+ <show-in-menu>true</show-in-menu>
+ <group-name>drc_scripts</group-name>
+ <menu-path>tools_menu.drc.end</menu-path>
+ <interpreter>dsl</interpreter>
+ <dsl-interpreter-name>drc-dsl-xml</dsl-interpreter-name>
+ <text># Area and Coverage Checker
+#
+# This DRC script can calculate how much of a given area
+# is covered by a given layer. This is useful for, e.g.,
+# ensuring less than a given percentage of a design/wafer
+# will be etched in a reactive ion etching process that
+# may vary significantly if that percentage changes too much.
+# This can also just compute the area of layers.
+#
+# INSTRUCTIONS:
+# 
+# This one's pretty easy. Modify the script below to
+# calculate a boundary area (either the area of a given
+# layer, or the area of its bounding box), calculate
+# the area of a layer of concern, then divide the two.
+# Or just display the area directly.
+
+# list of DRC functions: https://klayout.de/doc/about/drc_ref.html
+
+# First, configure the program to consider the layout in
+# 0.5mm tiles and run DRC checks in parallel on 8 CPU cores.
+# This makes the DRC program run much faster on large designs
+# mostly without changing the result. Note that this assumes the
+# design has a fairly flat hierarchy (i.e., not hundreds/thousands
+# of nested cells); for that, see the "deep" command.
+# https://klayout.de/doc/about/drc_ref_global.html#tiles
+tiles(0.5.mm)
+threads(8)
+
+# Get some layers from the currently open GDSII file
+wafer     = input(0, 0)
+nottrench = input(1, 0)
+retrench  = input(2, 0) 
+soi       = input(3, 0)
+soihole   = input(4, 0)
+resoi     = input(5, 0)
+metal     = input(6, 0)
+metalhole = input(7, 0)
+remetal   = input(8, 0)
+dummy     = input(9, 0)
+notdummy  = input(10, 0)
+
+# Compute some combination of these layers and calculate their area or bounding box.
+
+# Creates a rectangular bounding box of some layers and get the area of the bounding box
+bounds = (wafer.extents + nottrench.extents + retrench.extents + soi.extents + soihole.extents + resoi.extents + dummy.extents + notdummy.extents + metal.extents + metalhole.extents + remetal.extents).extents
+bounds_area = bounds.area
+
+# Do some more boolean arithmetic on other layers and get their areas (without a bounding box)
+combined_substrate = (nottrench - retrench)
+combined_substrate_area = combined_substrate.area
+
+combined_soi   = ((soi - soihole) + resoi) + (dummy - notdummy)
+combined_soi_area = combined_soi.area
+
+combined_metal = ((metal - metalhole) + remetal)
+combined_metal_area = combined_metal.area
+
+# Display results!
+# Create a report database to display results
+report("Area and Coverage Check")
+# then just pick and choose what to report.
+
+# Display an area (reported in square micrometers):
+# - highlight the "bounds" geometry
+# - show "bounding box area" in the DRC window
+# - display the given message, replacing "%.1f" with provided
+#       area measurement (in um^2), to one decimal place
+bounds.output("bounding box area", "bounding box has area %.1f um^2" % [bounds_area])
+
+# Display a coverage value (ratio of areas):
+# - highlight the "combined_soi" geometry (note: each polygon will be selected separately)
+# - show "SOI coverage" in the DRC window
+# - display the given message, replacing "%%" with a single percent sign
+combined_soi_coverage = combined_soi_area/bounds_area # note this assumes a rectangular bounding box because it uses bounds_area!
+combined_soi.output("SOI coverage", "SOI covers %.1f %% of total area" % [combined_soi_coverage*100])
+
+# Do something fancy: detect whether coverage satisfies some constraint
+combined_substrate_coverage = combined_substrate_area / bounds_area # note this assumes a rectangular bounding box because it uses bounds_area!
+combined_substrate_coverage_minimum = 0.85 # define a constant
+if combined_substrate_coverage &lt; combined_substrate_coverage_minimum then
+    combined_substrate.output("substrate coverage", "substrate covers %.1f %% of total area; should cover at least %.1f %%" % [combined_substrate_coverage*100, combined_substrate_coverage_minimum*100])
+else
+    make_layer.output("substrate coverage", "") # use empty layer ("make_layer") to indicate check passed (and will be highlighted green)
+end</text>
+</klayout-macro>
