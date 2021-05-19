@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description/>
+ <version/>
+ <category>drc</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <shortcut/>
+ <show-in-menu>true</show-in-menu>
+ <group-name>drc_scripts</group-name>
+ <menu-path>tools_menu.drc.end</menu-path>
+ <interpreter>dsl</interpreter>
+ <dsl-interpreter-name>drc-dsl-xml</dsl-interpreter-name>
+ <text># Geometry Checker
+#
+# This DRC script can check that a design satisfies
+# given geometric constraints (e.g., polygons in one layer
+# are inset at least a given amount from polygons in another).
+#
+# Instructions:
+#
+# Modify the program below (following inline comments) to
+# implement the desired geometry checks. When run, the program
+# will do some boolean algebra on the currently open GDSII file
+# and report the results.
+#
+# Because geometric constraints can vary significantly between
+# processes, below are a number of sample operations that
+# cover many use cases.
+#
+# It's sometimes helpful to combine this with an area and coverage
+# check DRC script, which does very similar things.
+
+# list of DRC functions: https://klayout.de/doc/about/drc_ref.html
+
+# First, configure the program to consider the layout in
+# 0.5mm tiles and run DRC checks in parallel on 8 CPU cores.
+# This makes the DRC program run much faster on large designs
+# mostly without changing the result. Note that this assumes the
+# design has a fairly flat hierarchy (i.e., not hundreds/thousands
+# of nested cells); for that, see the "deep" command.
+# https://klayout.de/doc/about/drc_ref_global.html#tiles
+tiles(0.5.mm)
+threads(8)
+
+# Get some layers from the currently open GDSII file
+wafer     = input(0, 0)
+nottrench = input(1, 0)
+retrench  = input(2, 0) 
+soi       = input(3, 0)
+soihole   = input(4, 0)
+resoi     = input(5, 0)
+metal     = input(6, 0)
+metalhole = input(7, 0)
+remetal   = input(8, 0)
+dummy     = input(9, 0)
+notdummy  = input(10, 0)
+
+# Now, do boolean algebra to combine layers if need be.
+# "+": make a polygon if there's something on either layer (union)
+# "-": make a polygon if there's something on the first layer and not the second (subtraction)
+# "&amp;": make a polygon if there's something on both layers simultaneously (intersection)
+combined_substrate = (nottrench - retrench)
+combined_soi   = ((soi - soihole) + resoi) + (dummy - notdummy)
+combined_metal = ((metal - metalhole) + remetal)
+# Get the rectangular bounding box (that acts like another layer) of some given layers
+bounds = (wafer.extents + nottrench.extents + retrench.extents + soi.extents + soihole.extents + resoi.extents + dummy.extents + notdummy.extents + metal.extents + metalhole.extents + remetal.extents).extents
+
+# Shrink a layer by a given amount.
+#shrunk_soi = combined_soi.sized(-5.0.um)
+
+# Write layers back to the GDSII file for troubleshooting.
+#combined_substrate.output(100, 0) # write "combined_substrate" to the GDSII layer (100,0)
+#combined_soi.output(101, 0)
+#combined_metal.output(102, 0)
+#bounds.output(103, 0)
+
+# create a report database to display results
+report("Geometry Check")
+
+# Check that different features on the "combined_substrate" layer are separated by at least 40um
+# ignore tips of 30 degree or wider angled corners (via angle_limit)
+# ignore small edge segments in approximately rounded semicircular corners that don't face each other (via projection)
+# use 39.6um instead of 40.um as 1% fudge factor for approximately rounded corners
+combined_substrate.space(39.6.um, projection, angle_limit(30.degree)).output("substrate min space violation", "features closer than 40um")
+
+# Check that different features on the "combined_substrate" layer are separated by at most 40um
+# ensure spaces between features are at most 40um wide (+ 1% fudge factor)
+(bounds - combined_substrate.sized(20.2.um)).output("substrate max space violation", "features farther apart than 40um")
+
+# Check that features on the "combined_substrate" layer are at least 40um wide
+combined_substrate.width(39.6.um, projection, angle_limit(30.degree)).output("substrate width violation", "feature thinner than 40um")
+
+# Check that features on the "combined_soi" layer are separated by at least 2um
+# ignore tips of 30 degree or wider angled corners (via angle_limit)
+# ignore small edge segments in approximately rounded semicircular corners that don't face each other (via projection)
+# use 1.98um instead of 2.um as 1% fudge factor for approximately rounded corners
+combined_soi.space(1.98.um, projection, angle_limit(30.degree)).output("SOI space violation", "features closer than 2um")
+
+# Check that features on the "combined_soi" layer are at least 2um wide
+combined_soi.width(1.98.um, projection, angle_limit(30.degree)).output("SOI width violation", "feature thinner than 2um")
+
+# Check that features on the "metal" layer are separated by at least 2um
+# ignore tips of 30 degree or wider angled corners (via angle_limit)
+# ignore small edge segments in approximately rounded semicircular corners that don't face each other (via projection)
+# use 1.98um instead of 2.um as 1% fudge factor for approximately rounded corners
+combined_metal.space(1.98.um, projection, angle_limit(30.degree)).output("metal space violation", "features closer than 2um")
+
+# Check that features on the "metal" layer are at least 2um wide
+combined_metal.width(1.98.um, projection, angle_limit(30.degree)).output("metal width violation", "feature thinner than 2um")
+
+# Check that features on the "metal" layer are entirely contained within features on the "combined_soi" layer
+combined_metal.outside(combined_soi).output("metal inside violation", "metal not on SOI")
+
+# Check that features on the "metal" layer are inset at least 5um from edges of features on the "combined_soi" layer
+combined_soi.enclosing(combined_metal, 4.95.um).output("metal enclosing violation", "metal not surrounded by at least 5um SOI")
+
+# Check that all features on the "combined_substrate" and
+# "combined_soi" layers are connected together (else, maybe
+# the unconnected parts will fall out of the wafer)
+structure = (combined_substrate + combined_soi)
+structure_parts = 0
+structure.each { |polygon| structure_parts += 1 } # count polygons
+if structure_parts &gt; 1 then
+    structure.output("contiguity violation", "design has %d parts not connected by SOI or substrate; will fall apart during fabrication" % structure_parts)
+else
+    make_layer.output("contiguity violation", "") # use empty layer ("make_layer") to indicate check passed (and will be highlighted green)
+end</text>
+</klayout-macro>
