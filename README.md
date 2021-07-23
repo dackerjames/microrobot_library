@@ -15,3 +15,7 @@ The `python` folder contains the beginnings of a python library with scripts tha
 These programs can ensure a design in a given GDSII file satisfies certain constraints (e.g., all metal features on a given layer are inset at least 5um from edges of silicon features).
 
 The `klayout_drc` folder contains DRC programs for KLayout (https://klayout.de/), the 2D GDSII file editing program.
+
+## 3D Geometry Creation
+
+The `gdsiistl` folder is a program to extrude layers from a GDSII 2D layout file into 3D geometry in STL format, primarily for 3D rendering.
