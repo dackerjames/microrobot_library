@@ -1,0 +1,3 @@
+[submodule "gdsiistl"]
+	path = gdsiistl
+	url = https://github.com/PisterLab/gdsiistl
