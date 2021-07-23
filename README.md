@@ -19,3 +19,5 @@ The `klayout_drc` folder contains DRC programs for KLayout (https://klayout.de/)
 ## 3D Geometry Creation
 
 The `gdsiistl` folder is a program to extrude layers from a GDSII 2D layout file into 3D geometry in STL format, primarily for 3D rendering.
+
+This can be used to make photorealistic 3D rendered images of designs. See https://bamlab.berkeley.edu/wiki/rendering for details.
